@@ -11,6 +11,9 @@ pub struct Args {
     )]
     pub lex: bool,
 
+    #[arg(long, requires("lex"), help("Use the new tokenizer"))]
+    pub v2: bool,
+
     #[arg(long, requires("lex"), help("Include whitespace when lexing"))]
     pub include_space: bool,
 

@@ -9,10 +9,17 @@ fn main() {
     let args = args::Args::parse();
 
     if args.lex {
-        let tokens = lex(args.command.unwrap(), args.include_space);
+        if args.v2 {
+            let tokens = posh_core::engine::parser::v2::lex::lex(args.command.unwrap());
+            for token in tokens {
+                println!("{token:?}");
+            }
+        } else {
+            let tokens = lex(args.command.unwrap(), args.include_space);
 
-        for token in tokens {
-            println!("{:?}", token);
+            for token in tokens {
+                println!("{:?}", token);
+            }
         }
 
         std::process::exit(0);
