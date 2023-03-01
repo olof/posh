@@ -131,10 +131,10 @@ impl Lexer for PoshLexer<'_> {
     fn parse_literal(&mut self, literal: &str) -> Option<String> {
         self.prev = self.chars.clone();
 
-        let mut literal_iter = literal.chars();
+        let literal_iter = literal.chars();
         let mut parsed = String::new();
 
-        while let Some(c) = literal_iter.next() {
+        for c in literal_iter {
             if matches!(self.next(), Some(n) if n == c) {
                 parsed.push(c);
             } else {
@@ -283,7 +283,7 @@ impl Lexer for PoshLexer<'_> {
         }
 
         self.parse_char('\'')
-            .and_then(|_| Some(self.parse_until(|c| c == '\'')))
+            .map(|_| self.parse_until(|c| c == '\''))
             .and_then(|s| {
                 self.parse_char('\'');
                 s
@@ -295,31 +295,12 @@ impl Lexer for PoshLexer<'_> {
     fn parse_double_quoted_string(&mut self) -> Option<Token> {
         self.parse_char('"')
             .and_then(|_| self.parse_until(|c| c == '"'))
-            .and_then(|s| {
+            .map(|s| {
                 self.parse_char('"');
-                Some(s)
+                s
             })
             .map(|s| Token::String(s, QuoteType::Double))
             .or_else(|| self.bail())
-
-        // // We know that the next token is a double quote here
-        // self.next();
-
-        // let mut parsed = String::new();
-        // let mut is_escaped = false;
-
-        // for c in self.chars.by_ref() {
-        //     match c {
-        //         '\\' if !is_escaped => is_escaped = true,
-        //         '"' if !is_escaped => break,
-        //         c => {
-        //             is_escaped = false;
-        //             parsed.push(c);
-        //         }
-        //     }
-        // }
-
-        // Some(Token::String(parsed, QuoteType::Double))
     }
 
     fn parse_any_string(&mut self) -> Option<Token> {
@@ -374,47 +355,41 @@ impl Lexer for PoshLexer<'_> {
         self.parse_literal("<<").or_else(|| self.bail())?;
         self.swallow_whitespace();
         self.parse_any_string()
-            .map(|t| {
-                match t {
-                    Token::String(s, _) => Token::HereDocument {
-                        file_descriptor: fd,
-                        delimiter: s,
-                    },
-                    t => t,
-                }
+            .map(|t| match t {
+                Token::String(s, _) => Token::HereDocument {
+                    file_descriptor: fd,
+                    delimiter: s,
+                },
+                t => t,
             })
             .or_else(|| self.bail())
     }
 
     fn parse_keyword(&mut self) -> Option<Token> {
-        use self::Keyword::*;
-        use Token::Keyword;
+        let mut parse_keyword =
+            |input, keyword| self.parse_literal(input).map(|_| Token::Keyword(keyword));
 
-        self.parse_literal("!")
-            .map(|_| Keyword(Not))
-            .or_else(|| self.parse_literal("{").map(|_| Keyword(LBrace)))
-            .or_else(|| self.parse_literal("}").map(|_| Keyword(RBrace)))
-            .or_else(|| self.parse_literal("case").map(|_| Keyword(Case)))
-            .or_else(|| self.parse_literal("done").map(|_| Keyword(Done)))
-            .or_else(|| self.parse_literal("do").map(|_| Keyword(Do)))
-            .or_else(|| self.parse_literal("elif").map(|_| Keyword(Elif)))
-            .or_else(|| self.parse_literal("else").map(|_| Keyword(Else)))
-            .or_else(|| self.parse_literal("esac").map(|_| Keyword(Esac)))
-            .or_else(|| self.parse_literal("fi").map(|_| Keyword(Fi)))
-            .or_else(|| self.parse_literal("for").map(|_| Keyword(For)))
-            .or_else(|| self.parse_literal("if").map(|_| Keyword(If)))
-            .or_else(|| self.parse_literal("in").map(|_| Keyword(In)))
-            .or_else(|| self.parse_literal("then").map(|_| Keyword(Then)))
-            .or_else(|| self.parse_literal("until").map(|_| Keyword(Until)))
-            .or_else(|| self.parse_literal("while").map(|_| Keyword(While)))
+        parse_keyword("!", Keyword::Not)
+            .or_else(|| parse_keyword("{", Keyword::LBrace))
+            .or_else(|| parse_keyword("}", Keyword::RBrace))
+            .or_else(|| parse_keyword("case", Keyword::Case))
+            .or_else(|| parse_keyword("done", Keyword::Done))
+            .or_else(|| parse_keyword("do", Keyword::Do))
+            .or_else(|| parse_keyword("elif", Keyword::Elif))
+            .or_else(|| parse_keyword("else", Keyword::Else))
+            .or_else(|| parse_keyword("esac", Keyword::Esac))
+            .or_else(|| parse_keyword("fi", Keyword::Fi))
+            .or_else(|| parse_keyword("for", Keyword::For))
+            .or_else(|| parse_keyword("if", Keyword::If))
+            .or_else(|| parse_keyword("in", Keyword::In))
+            .or_else(|| parse_keyword("then", Keyword::Then))
+            .or_else(|| parse_keyword("until", Keyword::Until))
+            .or_else(|| parse_keyword("while", Keyword::While))
             .or_else(|| self.bail())
     }
 
     fn swallow_whitespace(&mut self) {
-        while let Some(&c) = self.peek() {
-            if !is_whitespace(c) {
-                break;
-            }
+        while matches!(self.peek(), Some(&c) if is_whitespace(c)) {
             self.next();
         }
     }
