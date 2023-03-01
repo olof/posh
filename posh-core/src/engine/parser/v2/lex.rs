@@ -92,6 +92,8 @@ trait Lexer {
     fn parse_char_if(&mut self, predicate: impl FnOnce(char) -> bool) -> Option<char>;
     fn parse_literal(&mut self, literal: &str) -> Option<String>;
     fn parse_until(&mut self, predicate: impl Fn(char) -> bool) -> Option<String>;
+
+    fn parse_redirection_file_descriptor(&mut self) -> char;
 }
 
 #[derive(Debug)]
@@ -309,11 +311,17 @@ impl Lexer for PoshLexer<'_> {
             .or_else(|| self.parse_double_quoted_string())
     }
 
+    fn parse_redirection_file_descriptor(&mut self) -> char {
+        // FIXME: this currently only allows literal, unquoted characters.
+        //        we need to support e.g. "$foo">bar. should probably
+        //        make this parser return an Option<String>?
+        self.parse_char_if(is_valid_file_descriptor_for_redirection)
+            .unwrap_or('0')
+    }
+
     fn parse_redirect_output(&mut self) -> Option<Token> {
         self.prev = self.chars.clone();
-        let fd = self
-            .parse_char_if(is_valid_file_descriptor_for_redirection)
-            .unwrap_or('0');
+        let fd = self.parse_redirection_file_descriptor();
         self.parse_char('>').or_else(|| self.bail())?;
         let append = self.parse_char('>').is_some();
         self.swallow_whitespace();
@@ -331,9 +339,7 @@ impl Lexer for PoshLexer<'_> {
 
     fn parse_redirect_input(&mut self) -> Option<Token> {
         self.prev = self.chars.clone();
-        let fd = self
-            .parse_char_if(is_valid_file_descriptor_for_redirection)
-            .unwrap_or('0');
+        let fd = self.parse_redirection_file_descriptor();
         self.parse_char('<').or_else(|| self.bail())?;
         self.swallow_whitespace();
         self.parse_any_string()
@@ -349,9 +355,7 @@ impl Lexer for PoshLexer<'_> {
 
     fn parse_here_document(&mut self) -> Option<Token> {
         self.prev = self.chars.clone();
-        let fd = self
-            .parse_char_if(is_valid_file_descriptor_for_redirection)
-            .unwrap_or('0');
+        let fd = self.parse_redirection_file_descriptor();
         self.parse_literal("<<").or_else(|| self.bail())?;
         self.swallow_whitespace();
         self.parse_any_string()
